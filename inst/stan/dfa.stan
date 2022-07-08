@@ -437,7 +437,6 @@ transformed parameters {
         // pred[obs_covar_index[i,2],obs_covar_index[i,1]] += b_obs[obs_covar_index[i,3], obs_covar_index[i,2]] * obs_covar_value[i];
         // pred[obs_covar_index[i,2],obs_covar_index[i,1]] += b_obs[obs_covar_index[i,3], obs_covar_index[i,2]] * obs_covar_value[i];
         pred[obs_covar_index[i,2],obs_covar_index[i,1]] += b_obs[obs_covar_index[i,3]] * obs_covar_value[i];
-        pred[obs_covar_index[i,2],obs_covar_index[i,1]] += b_obs[obs_covar_index[i,3]] * obs_covar_value[i];
       }
     } else {
       // if data are in long format, multiple obs might exist per time point, and need to use ugly loops
