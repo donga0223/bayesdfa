@@ -182,7 +182,8 @@ parameters {
   vector<lower=lower_bound_z>[K*(1-proportional_model)] zpos; // constrained positive values
   simplex[K] p_z[P*proportional_model]; // alternative for proportional Z
   matrix[K * est_spline, n_knots * est_spline] spline_a; // weights for b-splines
-  matrix[n_obs_covar, P] b_obs; // coefficients on observation model
+  // matrix[n_obs_covar, P] b_obs; // coefficients on observation model
+  vector[n_obs_covar] b_obs; // coefficients on observation model
   matrix[n_pro_covar, K] b_pro; // coefficients on process model
   real<lower=0> sigma[nVariances*est_sigma_params];
   real<lower=0> gamma_a[nVariances*est_gamma_params];
@@ -433,13 +434,17 @@ transformed parameters {
       for(i in 1:num_obs_covar) {
         // if data are in wide format, only 1 obs exists per prediction + pred matrix can just be adjusted
         // indexed by time, trend, covariate #, covariate value
-        pred[obs_covar_index[i,2],obs_covar_index[i,1]] += b_obs[obs_covar_index[i,3], obs_covar_index[i,2]] * obs_covar_value[i];
+        // pred[obs_covar_index[i,2],obs_covar_index[i,1]] += b_obs[obs_covar_index[i,3], obs_covar_index[i,2]] * obs_covar_value[i];
+        // pred[obs_covar_index[i,2],obs_covar_index[i,1]] += b_obs[obs_covar_index[i,3], obs_covar_index[i,2]] * obs_covar_value[i];
+        pred[obs_covar_index[i,2],obs_covar_index[i,1]] += b_obs[obs_covar_index[i,3]] * obs_covar_value[i];
+        pred[obs_covar_index[i,2],obs_covar_index[i,1]] += b_obs[obs_covar_index[i,3]] * obs_covar_value[i];
       }
     } else {
       // if data are in long format, multiple obs might exist per time point, and need to use ugly loops
       // loop over dataframe of obs error covariates -- may be > observations if multiple covariates exist
       for(i in 1:num_obs_covar) {
-        obs_cov_offset[match_obs_covar[i]] += b_obs[obs_covar_index[i,3], obs_covar_index[i,2]] * obs_covar_value[i];
+        // obs_cov_offset[match_obs_covar[i]] += b_obs[obs_covar_index[i,3], obs_covar_index[i,2]] * obs_covar_value[i];
+        obs_cov_offset[match_obs_covar[i]] += b_obs[obs_covar_index[i,3]] * obs_covar_value[i];
       }
     }
   }
