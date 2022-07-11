@@ -113,5 +113,5 @@ sim_dfa_DA <- function (num_trends = 1, num_years = 20, num_ts = 4, phi = c(0.8)
                           d$sampling_args$data$col_indx_pos[i]], sigma[d$sampling_args$data$col_indx_pos[i]])
   }
   y_sim <- matrix(y, nrow = d$sampling_args$data$P)
-  list(y_sim = y_sim, pred = pred, x = x, Z = Z, sigma = sigma)
+  list(y_sim = y_sim, pred = pred, x = x, Z = Z, sigma = sigma, phi = phi)
 }

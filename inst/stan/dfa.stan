@@ -495,7 +495,9 @@ model {
   }
   // prior on AR(1) component if included
   if(est_phi == 1) {
-    phi ~ normal(0,1); // K elements
+    for(k in 1:K){
+      phi[k] ~ normal(0,1); // K elements
+    }
   }
   // prior on MA(1) component if included
   if(est_theta == 1) {
