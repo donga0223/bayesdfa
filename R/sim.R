@@ -105,7 +105,7 @@
 #' matplot(t(x$pred), type = "l")
 #' abline(v = 10)
 #' @export
-sim_dfa_DA <- function (num_trends = 1, num_years = 20, num_ts = 4, phi = c(0.8)
+sim_dfa <- function (num_trends = 1, num_years = 20, num_ts = 4, phi = c(0.8)
                         , loadings_matrix = matrix(nrow = num_ts, ncol = num_trends, rnorm(num_ts * num_trends, 0, 1))
                         , sigma = rlnorm(num_years,meanlog = log(0.2), 0.1)
                         , varIndx = rep(1, num_ts), extreme_value = NULL
@@ -170,7 +170,7 @@ sim_dfa_DA <- function (num_trends = 1, num_years = 20, num_ts = 4, phi = c(0.8)
 }
 
 
-sim_dfa <- function(num_trends = 1,
+sim_dfa_ofiginal <- function(num_trends = 1,
                     num_years = 20,
                     num_ts = 4,
                     loadings_matrix = matrix(
