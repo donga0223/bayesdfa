@@ -65,17 +65,28 @@ functions {
   }
 
   matrix block_diag_matrix(matrix A, int H, int P) {
-    matrix[H,H] O;
+    //matrix[H,H] O;
     matrix[H*P,H*P] rtn;
-    O = rep_matrix(0, H,H);
+    //O = rep_matrix(0, H,H);
     
     for(i in 1:P){
       rtn[((i-1)*H+1):(i*H)] = append_col(append_col(rep_matrix(0,H,H*(i-1)),A), rep_matrix(0,H,H*(P-i)));
     }  
     return rtn;
   }
-}
 
+  matrix block_diag_matrix_1(matrix A, int rep) {
+    int a[2] = dims(A);
+    //matrix[a[1], a[2]] O;
+    matrix[a[1]*rep, a[2]*rep] rtn;
+    //O = rep_matrix(0, a[1],a[2]);
+
+    for(i in 1:rep){
+      rtn[((i-1)*a[1]+1):(i*a[2])] = append_col(append_col(rep_matrix(0,a[1],a[2]*(i-1)),A), rep_matrix(0,a[1],a[2]*(rep-i)));
+    }
+    return rtn;
+  } 
+}
 
 data {
   int<lower=0> N; // number of data points
@@ -86,7 +97,11 @@ data {
   int<lower=0> row_indx[nZ];
   int<lower=0> col_indx[nZ];
   int<lower=0> nVariances;
+  int<lower=0> n_locVariances;
+  int<lower=0> n_horizonVariances;
   int<lower=0> varIndx[P];
+  int<lower=0> var_locIndx[P];
+  int<lower=0> var_horizonIndx[H];
   int<lower=0> nZero;
   int<lower=0> row_indx_z[nZero];
   int<lower=0> col_indx_z[nZero];
@@ -146,15 +161,16 @@ transformed data {
   vector[n_knots] muZeros;
   real gp_delta = 1e-9; // stabilizing value for GP model
   real lower_bound_z;
+  matrix[H, 1] Jone; 
   matrix[P*H, P] Aone;
-  matrix[P*H, P*H] SigmaHL;
-
-  for(i in 1:P*H){
-    for(j in 1:P){
-      Aone[i,j]=1;
-    }
+  
+  for(i in 1:H){
+    Jone[i,1]=1;
   }
 
+  Aone = block_diag_matrix_1(Jone, P);
+
+  
   for(i in 1:N) {
     data_locs[i] = i;
   }
@@ -171,7 +187,7 @@ transformed data {
     if(est_cor == 0) {
       n_loglik = P * N;
     } else {
-      n_loglik = N;
+      n_loglik = P*N;
     }
   }
 
@@ -208,7 +224,8 @@ parameters {
   // matrix[n_obs_covar, P] b_obs; // coefficients on observation model
   vector[n_obs_covar] b_obs; // coefficients on observation model
   matrix[n_pro_covar, K] b_pro; // coefficients on process model
-  real<lower=0> sigma[nVariances*est_sigma_params];
+  real<lower=0> sigma_l[n_locVariances*est_sigma_params];
+  real<lower=0> sigma_h[n_horizonVariances*est_sigma_params];
   real<lower=0> gamma_a[nVariances*est_gamma_params];
   real<lower=0> nb2_phi[nVariances*est_nb2_params];
   real<lower=2> nu[estimate_nu]; // df on student-t
@@ -227,6 +244,8 @@ transformed parameters {
   //matrix[P,N] yall;
   matrix[P*H,N] yall;  //*****horizon dimension include*****
   vector<lower=0>[P*H*est_sigma_params] sigma_vec;
+  vector<lower=0>[P*est_sigma_params] sigma_loc;
+  vector<lower=0>[H*est_sigma_params] sigma_horizon;
   vector<lower=0>[P*est_gamma_params] gamma_a_vec;
   vector<lower=0>[P*est_nb2_params] nb_phi_vec;
   vector[K] phi_vec; // for AR(1) part
@@ -248,6 +267,7 @@ transformed parameters {
   //matrix[N, n_knots] SigmaOffDiag;// matrix for GP model
   //matrix[N, n_knots] SigmaOffDiagTemp;// matrix for GP model
   vector[n_pos] obs_cov_offset;
+
 
   // block for process errors - can be estimated or not, and shared or not
   for(k in 1:K) {
@@ -280,8 +300,10 @@ transformed parameters {
   }
 
   if(est_sigma_params == 1) {
-    for(p in 1:P) {sigma_vec[p] = sigma[varIndx[p]];} // convert estimated sigmas to vec form
+    for(p in 1:P) {sigma_loc[p] = sigma_l[var_locIndx[p]];} // convert estimated sigmas to vec form
+    for(h in 1:H) {sigma_horizon[h] = sigma_h[var_horizonIndx[h]];}
   }
+  
   if(est_gamma_params == 1) {
     for(p in 1:P) {gamma_a_vec[p] = gamma_a[varIndx[p]];} // convert estimated sigmas to vec form
   }
@@ -448,7 +470,7 @@ transformed parameters {
   // N is sample size, P = time series, K = number trends
   // [PxN] = [PxK] * [KxN]
   pred = Z * x;
-  Apred = Aone * pred;
+  
 
   // obs_cov_offset is specific to each non-NA observation
   for(i in 1:n_pos) {
@@ -462,7 +484,7 @@ transformed parameters {
         // indexed by time, trend, covariate   , covariate value
         // pred[obs_covar_index[i,2],obs_covar_index[i,1]] += b_obs[obs_covar_index[i,3], obs_covar_index[i,2]] * obs_covar_value[i];
         // pred[obs_covar_index[i,2],obs_covar_index[i,1]] += b_obs[obs_covar_index[i,3], obs_covar_index[i,2]] * obs_covar_value[i];
-        Apred[obs_covar_index[i,2],obs_covar_index[i,1]] += b_obs[obs_covar_index[i,3]] * obs_covar_value[i];
+        pred[obs_covar_index[i,2],obs_covar_index[i,1]] += b_obs[obs_covar_index[i,3]] * obs_covar_value[i];
       }
     } else {
       // if data are in long format, multiple obs might exist per time point, and need to use ugly loops
@@ -474,10 +496,12 @@ transformed parameters {
     }
   }
 
+  Apred = Aone * pred; // check!!
+
   if(long_format==1 && est_cor==1) {
     // this is a pain, but we need to calculate the deviations (basically mean y - E[y] for each time point/time series)
     for(n in 1:N) {
-      for(p in 1:P) {
+      for(p in 1:P*H) {
         temp_sums[p,n] = 0.0;
         temp_counts[p,n] = 0.0;
       }
@@ -487,16 +511,14 @@ transformed parameters {
       temp_counts[row_indx_pos[i],col_indx_pos[i]] += 1;
     }
     for(n in 1:N) {
-      for(p in 1:P) {
+      for(p in 1:P*H) {
         // Now temp_sums will hold the mean residual for each time - timeseries combination
         temp_sums[p,n] = temp_sums[p,n]/temp_counts[p,n];
       }
     }
     //Omega_derived = multiply_lower_tri_self_transpose(Lcorr);
-    //Sigma_derived = quad_form_diag(multiply_lower_tri_self_transpose(Lcorr), sigma_vec);
-    SigmaHL = block_diag_matrix(Lcorr, H, P);
-    Sigma_derived = quad_form_diag(multiply_lower_tri_self_transpose(SigmaHL), sigma_vec);
-
+    Sigma_derived = quad_form_diag(multiply_lower_tri_self_transpose(Lcorr), sigma_horizon);
+    
 
     for(p in 1:P) {
       sigma11 = Sigma_derived[p,p]; //
@@ -535,7 +557,10 @@ model {
     sigma_process ~ normal(0,1);
   }
   // observation variance, which depend on family
-  if(est_sigma_params==1) sigma ~ student_t(3, 0, 1);
+  if(est_sigma_params==1){
+    sigma_l ~ student_t(3, 0, 1);
+    sigma_h ~ student_t(3, 0, 1);
+  }
   if(est_gamma_params==1) gamma_a ~ student_t(3, 0, 1);
   if(est_nb2_params==1) nb2_phi ~ student_t(3, 0, 1);
 
@@ -610,22 +635,29 @@ model {
     } else {
         if(obs_model == 1) {for(i in 1:n_pos) target += normal_lpdf(y[i] | offset[i] + Apred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i], sigma_vec[row_indx_pos[i]]);}
         if(obs_model == 2) {for(i in 1:n_pos) target += gamma_lpdf(y[i] | gamma_a_vec[row_indx_pos[i]], gamma_a_vec[row_indx_pos[i]] / exp(offset[i] + pred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i]));} // gamma
-        if(obs_model == 3) {for(i in 1:n_pos) target += poisson_log_lpmf(y_int[i] | offset[i] + Apred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i]);} // poisson
-        if(obs_model == 4) {for(i in 1:n_pos) target += neg_binomial_2_log_lpmf(y_int[i] | offset[i] + Apred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i], nb_phi_vec[row_indx_pos[i]]);} // negbin
-        if(obs_model == 5) {for(i in 1:n_pos) target += bernoulli_logit_lpmf(y_int[i] | offset[i] + Apred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i]);} // binomial
-        if(obs_model == 6) {for(i in 1:n_pos) target += lognormal_lpdf(y[i] | offset[i] + Apred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i], sigma_vec[row_indx_pos[i]]);} // lognormal
+        if(obs_model == 3) {for(i in 1:n_pos) target += poisson_log_lpmf(y_int[i] | offset[i] + pred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i]);} // poisson
+        if(obs_model == 4) {for(i in 1:n_pos) target += neg_binomial_2_log_lpmf(y_int[i] | offset[i] + pred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i], nb_phi_vec[row_indx_pos[i]]);} // negbin
+        if(obs_model == 5) {for(i in 1:n_pos) target += bernoulli_logit_lpmf(y_int[i] | offset[i] + pred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i]);} // binomial
+        if(obs_model == 6) {for(i in 1:n_pos) target += lognormal_lpdf(y[i] | offset[i] + pred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i], sigma_vec[row_indx_pos[i]]);} // lognormal
     }
   } else {
     // need to loop over time slices / columns - each ~ MVN
     if(long_format==0) {
-      if(obs_model == 1) {for(i in 1:N) target += multi_normal_cholesky_lpdf(col(yall,i) | col(Apred,i), diag_pre_multiply(sigma_vec, Lcorr));}
-    } else {
-      if(obs_model == 1) {for(i in 1:n_pos) target += normal_lpdf(y[i] | offset[i] + Apred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i] + cond_mean_vec[row_indx_pos[i]], cond_sigma_vec[row_indx_pos[i]]);}
+      if(obs_model == 1) {
+        for(i in 1:N){
+          for(p in 1:P){
+            target += multi_normal_cholesky_lpdf(yall[((p-1)*H+1):H,i] | Apred[((p-1)*H+1):H,i], sigma_loc[p]^2*diag_pre_multiply(sigma_horizon, Lcorr));
+          }
+        } 
+      } else {
+        if(obs_model == 1) {for(i in 1:n_pos) target += normal_lpdf(y[i] | offset[i] + Apred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i] + cond_mean_vec[row_indx_pos[i]], cond_sigma_vec[row_indx_pos[i]]);}
+      }
     }
   }
 }
 generated quantities {
   vector[n_loglik] log_lik;
+  //matrix[P,H] log_lik;
   matrix[n_pcor, n_pcor] Omega;
   matrix[n_pcor, n_pcor] Sigma;
   matrix[K,1] xstar; //random walk-trends in future
@@ -647,31 +679,35 @@ generated quantities {
       for(n in 1:N) {
         for(p in 1:P) {
           j = j + 1;
-          log_lik[j] = normal_lpdf(yall[p,n] | Apred[p,n], sigma_vec[p]);
+          log_lik[j] = normal_lpdf(yall[p,n] | pred[p,n], sigma_vec[p]);
         }
       }
     } else {
-      if(obs_model == 1) {for(i in 1:n_pos) log_lik[i] = normal_lpdf(y[i] | offset[i] + Apred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i], sigma_vec[row_indx_pos[i]]);}
+      if(obs_model == 1) {for(i in 1:n_pos) log_lik[i] = normal_lpdf(y[i] | offset[i] + pred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i], sigma_vec[row_indx_pos[i]]);}
       if(obs_model == 2) {for(i in 1:n_pos) log_lik[i] = gamma_lpdf(y[i] | gamma_a_vec[row_indx_pos[i]], gamma_a_vec[row_indx_pos[i]] / exp(offset[i] + Apred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i]));} // gamma
-      if(obs_model == 3) {for(i in 1:n_pos) log_lik[i] = poisson_log_lpmf(y_int[i] | offset[i] + Apred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i]);} // poisson
-      if(obs_model == 4) {for(i in 1:n_pos) log_lik[i] = neg_binomial_2_log_lpmf(y_int[i] | offset[i] + Apred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i], nb_phi_vec[row_indx_pos[i]]);} // negbin
-      if(obs_model == 5) {for(i in 1:n_pos) log_lik[i] = bernoulli_logit_lpmf(y_int[i] | offset[i] + Apred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i]);} // binomial
-      if(obs_model == 6) {for(i in 1:n_pos) log_lik[i] = lognormal_lpdf(y[i] | offset[i] + Apred[row_indx_pos[i],col_indx_pos[i]], sigma_vec[row_indx_pos[i]] + obs_cov_offset[i]);} // lognormal
+      if(obs_model == 3) {for(i in 1:n_pos) log_lik[i] = poisson_log_lpmf(y_int[i] | offset[i] + pred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i]);} // poisson
+      if(obs_model == 4) {for(i in 1:n_pos) log_lik[i] = neg_binomial_2_log_lpmf(y_int[i] | offset[i] + pred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i], nb_phi_vec[row_indx_pos[i]]);} // negbin
+      if(obs_model == 5) {for(i in 1:n_pos) log_lik[i] = bernoulli_logit_lpmf(y_int[i] | offset[i] + pred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i]);} // binomial
+      if(obs_model == 6) {for(i in 1:n_pos) log_lik[i] = lognormal_lpdf(y[i] | offset[i] + pred[row_indx_pos[i],col_indx_pos[i]], sigma_vec[row_indx_pos[i]] + obs_cov_offset[i]);} // lognormal
 
     }
 
   } else {
     if(long_format==0) {
       for(i in 1:N) {
-        log_lik[i] = multi_normal_cholesky_lpdf(col(yall,i) | col(Apred,i), diag_pre_multiply(sigma_vec, Lcorr));
+        for(p in 1:P){
+          j = j + 1;
+          log_lik[j] = multi_normal_cholesky_lpdf(yall[((p-1)*H+1):H,i] | Apred[((p-1)*H+1):H,i], sigma_loc[p]^2*diag_pre_multiply(sigma_horizon, Lcorr));     
+        }
       }
     } else {
       for(i in 1:n_pos) {
         //  //row_indx_pos[i] is the time series, col_index_pos is the time
-        log_lik[i] = normal_lpdf(y[i] | offset[i] + Apred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i] + cond_mean_vec[row_indx_pos[i]], cond_sigma_vec[row_indx_pos[i]]);
+        log_lik[i] = normal_lpdf(y[i] | offset[i] + pred[row_indx_pos[i],col_indx_pos[i]] + obs_cov_offset[i] + cond_mean_vec[row_indx_pos[i]], cond_sigma_vec[row_indx_pos[i]]);
       }
     }
   }
+  
 
   for(k in 1:K) {
     future_devs[k] = 0;
