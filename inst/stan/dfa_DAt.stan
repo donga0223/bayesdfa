@@ -70,7 +70,7 @@ functions {
     //O = rep_matrix(0, H,H);
     
     for(i in 1:P){
-      rtn[((i-1)*H+1):(i*H)] = append_col(append_col(rep_matrix(0,H,H*(i-1)),A), rep_matrix(0,H,H*(P-i)));
+      rtn[((i-1)*H+1):(i*H),] = append_col(append_col(rep_matrix(0,H,H*(i-1)),A), rep_matrix(0,H,H*(P-i)));
     }  
     return rtn;
   }
@@ -82,7 +82,7 @@ functions {
     //O = rep_matrix(0, a[1],a[2]);
 
     for(i in 1:rep){
-      rtn[((i-1)*a[1]+1):(i*a[2])] = append_col(append_col(rep_matrix(0,a[1],a[2]*(i-1)),A), rep_matrix(0,a[1],a[2]*(rep-i)));
+      rtn[((i-1)*a[1]+1):(i*a[1]),] = append_col(append_col(rep_matrix(0,a[1],a[2]*(i-1)),A), rep_matrix(0,a[1],a[2]*(rep-i)));
     }
     return rtn;
   } 
